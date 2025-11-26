@@ -1,0 +1,650 @@
+import tkinter as tk
+from tkinter import ttk, messagebox, simpledialog
+import os
+
+class StudentManager:
+    def __init__(self, filename="studentMarks.txt"):
+        self.filename = filename
+        self.students = []
+        self.load_data()
+    #this entire function is for loading your database/table to the program 
+    def load_data(self):
+        """Load student data from file"""
+        try:
+            with open(self.filename, 'r') as file:
+                #lines reads all the lines of the file and puts it into the list named lines
+                lines = file.readlines()
+                #opens the file in read mode and creates an obejct named file
+                #First line is number of students and reads how many students should be in the file
+                num_students = int(lines[0].strip())
+                #creating then emptying the file to prepare ofr loading of the information
+                self.students = []
+                for line in lines[1:]:
+                    #procesess the information one by one 
+                    if line.strip():
+                        #stripping all whitespace 
+                        data = line.strip().split(',')
+                        #splitting the lines into their own strings whenever a comma appears
+                        student = {
+                            #student dictionary with key value pairs
+                            'code': int(data[0]),
+                            'name': data[1],
+                            'coursework1': int(data[2]),
+                            'coursework2': int(data[3]),
+                            'coursework3': int(data[4]),
+                            'exam': int(data[5])
+                        }
+                        self.students.append(student)
+            #adds the new list with the separated strings into the class student list
+        except FileNotFoundError:
+            messagebox.showerror("Error", f"File {self.filename} not found!")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error loading data: {str(e)}")
+    
+    def save_data(self):
+        """Save student data to file"""
+        try:
+            #opens the file and puts it into write mode so that we can edit, append, and delete data
+            with open(self.filename, 'w') as file:
+                file.write(f"{len(self.students)}\n")
+                #counts all the students
+                for student in self.students:
+                    #broken into two lines for readability
+                    #also in f string
+                    file.write(f"{student['code']},{student['name']},{student['coursework1']},"
+                              f"{student['coursework2']},{student['coursework3']},{student['exam']}\n")
+            return True
+        #exeption handling 
+        except Exception as e:
+            messagebox.showerror("Error", f"Error saving data: {str(e)}")
+            return False
+    
+    #math for the averaginf of the grades between the first, second, third, and exam grades
+    #with exam holding more weight over the others 
+    def calculate_totals(self, student):
+        """Calculate total marks and percentages for a student"""
+        total_coursework = student['coursework1'] + student['coursework2'] + student['coursework3']
+        total_marks = total_coursework + student['exam']
+        percentage = (total_marks / 160) * 100  # 60 coursework + 100 exam = 160 total
+        
+        #grading separations for the grades we get 
+        if percentage >= 70:
+            grade = 'A'
+        elif percentage >= 60:
+            grade = 'B'
+        elif percentage >= 50:
+            grade = 'C'
+        elif percentage >= 40:
+            grade = 'D'
+        else:
+            grade = 'F'
+        
+        return total_coursework, total_marks, percentage, grade
+    #this is for the search function so that i can search for students
+    def get_all_students_info(self):
+        """Get formatted information for all students"""
+        if not self.students:
+            return "No students found.", 0, 0
+        
+        output = []
+        #empty list
+        total_percentage = 0
+        #making sure all students start from 0
+        #calculate_totals(student): Calls helper method that returns:
+
+        #total_coursework: Sum of 3 coursework marks (out of 60)
+        #total_marks: Total of coursework + exam (out of 160)
+        #percentage: Overall percentage score
+        #grade: Letter grade (A-F)
+        #total_percentage += percentage: Adds current student's percentage to running total
+        for student in self.students:
+            total_coursework, total_marks, percentage, grade = self.calculate_totals(student)
+            total_percentage += percentage
+            
+            #student info with all the key value pairs added in f string 
+            student_info = (
+                f"Name: {student['name']}\n"
+                f"Student Number: {student['code']}\n"
+                f"Total Coursework: {total_coursework}/60\n"
+                f"Exam Mark: {student['exam']}/100\n"
+                f"Overall Percentage: {percentage:.1f}%\n"
+                f"Grade: {grade}\n"
+                f"{'-'*40}"
+            )
+            output.append(student_info)
+        #average of all students in the list
+        avg_percentage = total_percentage / len(self.students)
+        summary = f"\nSummary:\nNumber of students: {len(self.students)}\nAverage Percentage: {avg_percentage:.1f}%"
+        output.append(summary)
+        
+        return "\n".join(output), len(self.students), avg_percentage
+    
+    def get_student_by_code(self, code):
+        """Get student by student code"""
+        for student in self.students:
+            if student['code'] == code:
+                return student
+        return None
+    
+    def get_student_by_name(self, name):
+        """Get students by name (partial match)"""
+        matches = []
+        for student in self.students:
+            if name.lower() in student['name'].lower():
+                matches.append(student)
+        return matches
+    
+    def get_highest_scoring_student(self):
+        """Get student with highest overall percentage"""
+        if not self.students:
+            return None
+        
+        highest_student = None
+        highest_percentage = -1
+        
+        for student in self.students:
+            _, _, percentage, _ = self.calculate_totals(student)
+            if percentage > highest_percentage:
+                highest_percentage = percentage
+                highest_student = student
+        
+        return highest_student
+    
+    def get_lowest_scoring_student(self):
+        """Get student with lowest overall percentage"""
+        if not self.students:
+            return None
+        
+        lowest_student = None
+        lowest_percentage = 101
+        
+        for student in self.students:
+            _, _, percentage, _ = self.calculate_totals(student)
+            if percentage < lowest_percentage:
+                lowest_percentage = percentage
+                lowest_student = student
+        
+        return lowest_student
+    
+    def sort_students(self, by='percentage', ascending=True):
+        """Sort students by various criteria"""
+        if by == 'percentage':
+            key_func = lambda s: self.calculate_totals(s)[2]
+        elif by == 'name':
+            key_func = lambda s: s['name']
+        elif by == 'code':
+            key_func = lambda s: s['code']
+        elif by == 'grade':
+            key_func = lambda s: self.calculate_totals(s)[3]
+        else:
+            key_func = lambda s: self.calculate_totals(s)[2]  # Default to percentage
+        
+        self.students.sort(key=key_func, reverse=not ascending)
+    
+    def add_student(self, code, name, cw1, cw2, cw3, exam):
+        """Add a new student"""
+        # Check if code already exists
+        if any(student['code'] == code for student in self.students):
+            return False, "Student code already exists!"
+        
+        new_student = {
+            'code': code,
+            'name': name,
+            'coursework1': cw1,
+            'coursework2': cw2,
+            'coursework3': cw3,
+            'exam': exam
+        }
+        self.students.append(new_student)
+        return True, "Student added successfully!"
+    
+    def delete_student(self, code):
+        """Delete student by code"""
+        for i, student in enumerate(self.students):
+            if student['code'] == code:
+                del self.students[i]
+                return True, "Student deleted successfully!"
+        return False, "Student not found!"
+    
+    def update_student(self, code, field, new_value):
+        """Update student information"""
+        student = self.get_student_by_code(code)
+        if not student:
+            return False, "Student not found!"
+        
+        if field in ['coursework1', 'coursework2', 'coursework3', 'exam']:
+            student[field] = int(new_value)
+        else:
+            student[field] = new_value
+        
+        return True, "Student updated successfully!"
+
+
+class StudentManagerGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Student Marks Manager")
+        self.root.geometry("800x600")
+        
+        self.manager = StudentManager()
+        
+        # Create menu bar
+        self.create_menu()
+        
+        # Create main text area
+        self.create_main_area()
+    
+    def create_menu(self):
+        """Create the menu system"""
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # File menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Reload Data", command=self.reload_data)
+        file_menu.add_command(label="Exit", command=self.root.quit)
+        
+        # View menu
+        view_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="View", menu=view_menu)
+        view_menu.add_command(label="All Students", command=self.view_all_students)
+        view_menu.add_command(label="Individual Student", command=self.view_individual_student)
+        view_menu.add_separator()
+        view_menu.add_command(label="Highest Scoring", command=self.view_highest_student)
+        view_menu.add_command(label="Lowest Scoring", command=self.view_lowest_student)
+        
+        # Sort menu
+        sort_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Sort", menu=sort_menu)
+        sort_menu.add_command(label="By Percentage (Asc)", 
+                            command=lambda: self.sort_students('percentage', True))
+        sort_menu.add_command(label="By Percentage (Desc)", 
+                            command=lambda: self.sort_students('percentage', False))
+        sort_menu.add_command(label="By Name (Asc)", 
+                            command=lambda: self.sort_students('name', True))
+        sort_menu.add_command(label="By Name (Desc)", 
+                            command=lambda: self.sort_students('name', False))
+        
+        # Manage menu
+        manage_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Manage", menu=manage_menu)
+        manage_menu.add_command(label="Add Student", command=self.add_student)
+        manage_menu.add_command(label="Delete Student", command=self.delete_student)
+        manage_menu.add_command(label="Update Student", command=self.update_student)
+    
+    def create_main_area(self):
+        """Create the main text area and scrollbar"""
+        # Main frame
+        main_frame = ttk.Frame(self.root)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Text widget with scrollbar
+        self.text_area = tk.Text(main_frame, wrap=tk.WORD, width=80, height=25)
+        scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.text_area.yview)
+        self.text_area.configure(yscrollcommand=scrollbar.set)
+        
+        self.text_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Status bar
+        self.status_var = tk.StringVar()
+        self.status_var.set("Ready")
+        status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
+        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+    
+    def clear_text(self):
+        """Clear the text area"""
+        self.text_area.delete(1.0, tk.END)
+    
+    def display_text(self, text):
+        """Display text in the text area"""
+        self.clear_text()
+        self.text_area.insert(1.0, text)
+    
+    def reload_data(self):
+        """Reload data from file"""
+        self.manager.load_data()
+        self.status_var.set("Data reloaded successfully")
+        messagebox.showinfo("Success", "Data reloaded successfully!")
+    
+    def view_all_students(self):
+        """Display all students"""
+        output, num_students, avg_percentage = self.manager.get_all_students_info()
+        self.display_text(output)
+        self.status_var.set(f"Displaying all {num_students} students - Average: {avg_percentage:.1f}%")
+    
+    def view_individual_student(self):
+        """View individual student record"""
+        # Ask for student identifier
+        identifier = simpledialog.askstring("Find Student", 
+                                          "Enter student code or name:")
+        if not identifier:
+            return
+        
+        # Try as code first
+        try:
+            code = int(identifier)
+            student = self.manager.get_student_by_code(code)
+            if student:
+                self.display_student_info(student)
+                self.status_var.set(f"Displaying student: {student['name']}")
+                return
+        except ValueError:
+            pass
+        
+        # Try as name
+        matches = self.manager.get_student_by_name(identifier)
+        if len(matches) == 1:
+            self.display_student_info(matches[0])
+            self.status_var.set(f"Displaying student: {matches[0]['name']}")
+        elif len(matches) > 1:
+            # Show selection dialog for multiple matches
+            self.ask_student_selection(matches)
+        else:
+            messagebox.showerror("Error", "Student not found!")
+    
+    def ask_student_selection(self, students):
+        """Ask user to select from multiple matching students"""
+        selection_window = tk.Toplevel(self.root)
+        selection_window.title("Select Student")
+        selection_window.geometry("400x300")
+        
+        ttk.Label(selection_window, text="Multiple students found. Please select one:").pack(pady=10)
+        
+        listbox = tk.Listbox(selection_window, width=50, height=10)
+        listbox.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
+        
+        for student in students:
+            listbox.insert(tk.END, f"{student['code']} - {student['name']}")
+        
+        def on_select():
+            selection = listbox.curselection()
+            if selection:
+                selected_student = students[selection[0]]
+                self.display_student_info(selected_student)
+                self.status_var.set(f"Displaying student: {selected_student['name']}")
+                selection_window.destroy()
+        
+        ttk.Button(selection_window, text="Select", command=on_select).pack(pady=10)
+    
+    def display_student_info(self, student):
+        """Display information for a single student"""
+        total_coursework, total_marks, percentage, grade = self.manager.calculate_totals(student)
+        
+        info = (
+            f"STUDENT RECORD\n"
+            f"{'='*40}\n"
+            f"Name: {student['name']}\n"
+            f"Student Number: {student['code']}\n"
+            f"Coursework 1: {student['coursework1']}/20\n"
+            f"Coursework 2: {student['coursework2']}/20\n"
+            f"Coursework 3: {student['coursework3']}/20\n"
+            f"Total Coursework: {total_coursework}/60\n"
+            f"Exam Mark: {student['exam']}/100\n"
+            f"Total Marks: {total_marks}/160\n"
+            f"Overall Percentage: {percentage:.1f}%\n"
+            f"Grade: {grade}\n"
+            f"{'='*40}"
+        )
+        self.display_text(info)
+    
+    def view_highest_student(self):
+        """Display highest scoring student"""
+        student = self.manager.get_highest_scoring_student()
+        if student:
+            self.display_student_info(student)
+            total_coursework, total_marks, percentage, grade = self.manager.calculate_totals(student)
+            self.status_var.set(f"Highest scoring student: {student['name']} ({percentage:.1f}%)")
+        else:
+            messagebox.showerror("Error", "No students found!")
+    
+    def view_lowest_student(self):
+        """Display lowest scoring student"""
+        student = self.manager.get_lowest_scoring_student()
+        if student:
+            self.display_student_info(student)
+            total_coursework, total_marks, percentage, grade = self.manager.calculate_totals(student)
+            self.status_var.set(f"Lowest scoring student: {student['name']} ({percentage:.1f}%)")
+        else:
+            messagebox.showerror("Error", "No students found!")
+    
+    def sort_students(self, by, ascending):
+        """Sort students and display results"""
+        self.manager.sort_students(by, ascending)
+        order = "ascending" if ascending else "descending"
+        self.view_all_students()
+        self.status_var.set(f"Students sorted by {by} ({order})")
+    
+    def add_student(self):
+        """Add a new student"""
+        dialog = AddStudentDialog(self.root)
+        if dialog.result:
+            code, name, cw1, cw2, cw3, exam = dialog.result
+            success, message = self.manager.add_student(code, name, cw1, cw2, cw3, exam)
+            if success:
+                if self.manager.save_data():
+                    messagebox.showinfo("Success", message)
+                    self.status_var.set(f"Added student: {name}")
+                else:
+                    messagebox.showerror("Error", "Student added but failed to save to file!")
+            else:
+                messagebox.showerror("Error", message)
+    
+    def delete_student(self):
+        """Delete a student"""
+        code = simpledialog.askinteger("Delete Student", "Enter student code to delete:")
+        if code:
+            student = self.manager.get_student_by_code(code)
+            if student:
+                if messagebox.askyesno("Confirm Delete", 
+                                     f"Are you sure you want to delete {student['name']}?"):
+                    success, message = self.manager.delete_student(code)
+                    if success:
+                        if self.manager.save_data():
+                            messagebox.showinfo("Success", message)
+                            self.status_var.set(f"Deleted student: {student['name']}")
+                        else:
+                            messagebox.showerror("Error", "Student deleted but failed to save to file!")
+                    else:
+                        messagebox.showerror("Error", message)
+            else:
+                messagebox.showerror("Error", "Student not found!")
+    
+    def update_student(self):
+        """Update student information"""
+        code = simpledialog.askinteger("Update Student", "Enter student code to update:")
+        if code:
+            student = self.manager.get_student_by_code(code)
+            if student:
+                dialog = UpdateStudentDialog(self.root, student)
+                if dialog.result:
+                    field, new_value = dialog.result
+                    success, message = self.manager.update_student(code, field, new_value)
+                    if success:
+                        if self.manager.save_data():
+                            messagebox.showinfo("Success", message)
+                            self.status_var.set(f"Updated student: {student['name']}")
+                        else:
+                            messagebox.showerror("Error", "Student updated but failed to save to file!")
+                    else:
+                        messagebox.showerror("Error", message)
+            else:
+                messagebox.showerror("Error", "Student not found!")
+
+
+class AddStudentDialog:
+    def __init__(self, parent):
+        self.result = None
+        
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title("Add New Student")
+        self.dialog.geometry("300x300")
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+        
+        self.create_widgets()
+        self.dialog.wait_window()
+    
+    def create_widgets(self):
+        """Create dialog widgets"""
+        ttk.Label(self.dialog, text="Add New Student", font=('Arial', 12, 'bold')).pack(pady=10)
+        
+        # Entry fields
+        fields = [
+            ("Student Code:", "code"),
+            ("Name:", "name"),
+            ("Coursework 1 (0-20):", "cw1"),
+            ("Coursework 2 (0-20):", "cw2"),
+            ("Coursework 3 (0-20):", "cw3"),
+            ("Exam Mark (0-100):", "exam")
+        ]
+        
+        self.entries = {}
+        for label_text, field_name in fields:
+            frame = ttk.Frame(self.dialog)
+            frame.pack(fill=tk.X, padx=10, pady=5)
+            
+            ttk.Label(frame, text=label_text).pack(side=tk.LEFT)
+            entry = ttk.Entry(frame)
+            entry.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+            self.entries[field_name] = entry
+        
+        # Buttons
+        button_frame = ttk.Frame(self.dialog)
+        button_frame.pack(pady=10)
+        
+        ttk.Button(button_frame, text="Add", command=self.on_ok).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=self.on_cancel).pack(side=tk.LEFT, padx=5)
+    
+    def on_ok(self):
+        """Handle OK button"""
+        try:
+            code = int(self.entries['code'].get())
+            name = self.entries['name'].get()
+            cw1 = int(self.entries['cw1'].get())
+            cw2 = int(self.entries['cw2'].get())
+            cw3 = int(self.entries['cw3'].get())
+            exam = int(self.entries['exam'].get())
+            
+            # Validate ranges
+            if not (1000 <= code <= 9999):
+                messagebox.showerror("Error", "Student code must be between 1000 and 9999")
+                return
+            
+            if not (0 <= cw1 <= 20) or not (0 <= cw2 <= 20) or not (0 <= cw3 <= 20):
+                messagebox.showerror("Error", "Coursework marks must be between 0 and 20")
+                return
+            
+            if not (0 <= exam <= 100):
+                messagebox.showerror("Error", "Exam mark must be between 0 and 100")
+                return
+            
+            if not name.strip():
+                messagebox.showerror("Error", "Name cannot be empty")
+                return
+            
+            self.result = (code, name, cw1, cw2, cw3, exam)
+            self.dialog.destroy()
+        
+        except ValueError:
+            messagebox.showerror("Error", "Please enter valid numbers for all marks")
+    
+    def on_cancel(self):
+        """Handle Cancel button"""
+        self.dialog.destroy()
+
+
+class UpdateStudentDialog:
+    def __init__(self, parent, student):
+        self.student = student
+        self.result = None
+        
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title(f"Update Student: {student['name']}")
+        self.dialog.geometry("300x200")
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+        
+        self.create_widgets()
+        self.dialog.wait_window()
+    
+    def create_widgets(self):
+        """Create dialog widgets"""
+        ttk.Label(self.dialog, text=f"Update {self.student['name']}", 
+                 font=('Arial', 12, 'bold')).pack(pady=10)
+        
+        # Field selection
+        ttk.Label(self.dialog, text="Select field to update:").pack(pady=5)
+        
+        self.field_var = tk.StringVar(value="name")
+        fields = [
+            ("Name", "name"),
+            ("Coursework 1", "coursework1"),
+            ("Coursework 2", "coursework2"),
+            ("Coursework 3", "coursework3"),
+            ("Exam Mark", "exam")
+        ]
+        
+        for display_name, field_name in fields:
+            ttk.Radiobutton(self.dialog, text=display_name, 
+                           variable=self.field_var, value=field_name).pack(anchor=tk.W, padx=20)
+        
+        # New value entry
+        ttk.Label(self.dialog, text="New value:").pack(pady=5)
+        self.value_entry = ttk.Entry(self.dialog)
+        self.value_entry.pack(pady=5, padx=20, fill=tk.X)
+        self.value_entry.insert(0, str(self.student['name']))
+        
+        # Buttons
+        button_frame = ttk.Frame(self.dialog)
+        button_frame.pack(pady=10)
+        
+        ttk.Button(button_frame, text="Update", command=self.on_ok).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=self.on_cancel).pack(side=tk.LEFT, padx=5)
+    
+    def on_ok(self):
+        """Handle OK button"""
+        field = self.field_var.get()
+        new_value = self.value_entry.get()
+        
+        if not new_value.strip():
+            messagebox.showerror("Error", "Value cannot be empty")
+            return
+        
+        # Validate numeric fields
+        if field in ['coursework1', 'coursework2', 'coursework3']:
+            try:
+                value = int(new_value)
+                if not (0 <= value <= 20):
+                    messagebox.showerror("Error", "Coursework marks must be between 0 and 20")
+                    return
+            except ValueError:
+                messagebox.showerror("Error", "Please enter a valid number")
+                return
+        elif field == 'exam':
+            try:
+                value = int(new_value)
+                if not (0 <= value <= 100):
+                    messagebox.showerror("Error", "Exam mark must be between 0 and 100")
+                    return
+            except ValueError:
+                messagebox.showerror("Error", "Please enter a valid number")
+                return
+        
+        self.result = (field, new_value)
+        self.dialog.destroy()
+    
+    def on_cancel(self):
+        """Handle Cancel button"""
+        self.dialog.destroy()
+
+
+def main():
+    root = tk.Tk()
+    app = StudentManagerGUI(root)
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
+
